@@ -162,6 +162,25 @@ Run the container:
 ```bash
 docker run -d -p 8000:8000 --env-file .env --name writer-editor-app writer-editor:latest
 ```
+## Evaluation
+
+The guardrail agent is evaluated on a labeled dataset (`eval/guardrails_dataset.jsonl`, 38 cases:
+normal, borderline, harmful, injection, off-scope, empty). Each case runs 3 times, because LLM
+output varies between runs. Runs where the LLM call fails are counted as errors and excluded
+from accuracy.
+
+Run it:
+
+    $env:PYTHONPATH="src"
+    uv run python eval/run_guardrails_eval.py
+
+| Version | Overall | Hidden injection (8 cases x 3) | Legit requests wrongly blocked |
+|---|---|---|---|
+| Baseline | 93/114 (82%) | 3/24 (12%) | 0 |
+| + explicit injection rule in the prompt, user input moved to the user message | 114/114 (100%) | 24/24 (100%) | 0 |
+
+Known limitation: the prompt was tuned against this same dataset, so the 100% is likely optimistic.
+A held-out test set is needed for an unbiased number.
 
 ---
 

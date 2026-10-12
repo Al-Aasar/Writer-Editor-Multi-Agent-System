@@ -1,5 +1,7 @@
 # Writer-Editor Multi-Agent System
 
+![Tests](https://github.com/Al-Aasar/Writer_editor/actions/workflows/tests.yml/badge.svg)
+
 An autonomous, production-ready multi-agent article writing and editorial review system built with **LangGraph**, **LangChain**, **Groq**, **Tavily**, and **FastAPI**.
 
 ---

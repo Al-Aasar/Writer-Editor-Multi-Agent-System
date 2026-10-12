@@ -2,7 +2,7 @@
 
 ![Tests](https://github.com/Al-Aasar/Writer_editor/actions/workflows/tests.yml/badge.svg)
 
-An autonomous, production-ready multi-agent article writing and editorial review system built with **LangGraph**, **LangChain**, **Groq**, **Tavily**, and **FastAPI**.
+A well-tested multi-agent article writing and editorial review system built with **LangGraph**, **LangChain**, **Groq**, **Tavily**, and **FastAPI**.
 
 ---
 
@@ -40,6 +40,8 @@ flowchart TD
 - **Multi-Agent Collaboration**: Specialized roles (Security/Guardrails, Research & Writing, Editorial Review).
 - **Automated Feedback Loop**: Iterative refinement cycle (up to 3 rounds) with stopping criteria.
 - **Web Research Grounding**: Integrates live web search via Tavily Search to provide factual citations and reduce hallucinations.
+- **Fail-Closed Guardrails**: If the safety check itself fails (for example, an LLM rate limit), the request is rejected instead of allowed through.
+- **Tested & Evaluated**: Unit tests with CI, plus a labeled evaluation set for the guardrail prompt.
 - **High Performance LLM Inference**: Powered by Groq's high-speed inference engine (`qwen/qwen3.8-27b`).
 - **RESTful API**: Async FastAPI interface with Pydantic request/response schemas.
 - **Container Ready**: Dockerfile configured using Astral `uv` for minimal image size and fast build times.
@@ -50,18 +52,29 @@ flowchart TD
 
 ```text
 Writer_editor/
-├── Dockerfile                  # Container deployment specification
-├── pyproject.toml              # Project dependencies and CLI entrypoints
-├── uv.lock                     # Locked dependency tree
-├── .env.example                # Sample environment variables
-├── README.md                   # Project documentation
+├── .github/workflows/
+│   └── tests.yml                   # CI: runs the tests on every push
+├── eval/
+│   ├── guardrails_dataset.jsonl    # Labeled cases for the guardrail eval
+│   └── run_guardrails_eval.py      # Runs each case 3 times and reports accuracy
+├── tests/                          # Unit tests (LLM calls are mocked)
+│   ├── conftest.py
+│   ├── test_guardrails.py
+│   ├── test_routing.py
+│   ├── test_editor.py
+│   └── test_utils.py
+├── Dockerfile                      # Container deployment specification
+├── pyproject.toml                  # Project dependencies and CLI entrypoints
+├── uv.lock                         # Locked dependency tree
+├── .env.example                    # Sample environment variables
+├── README.md                       # Project documentation
 └── src/
     └── writer_editor/
-        ├── __init__.py         # Package entrypoint
-        ├── main.py             # FastAPI REST application
-        ├── backend.py          # LangGraph state machine & router logic
-        ├── state.py            # TypedDict state definition (WriterState)
-        ├── utils.py            # LLM helpers & JSON extraction utilities
+        ├── __init__.py             # Package entrypoint
+        ├── main.py                 # FastAPI REST application
+        ├── backend.py              # LangGraph state machine & router logic
+        ├── state.py                # TypedDict state definition (WriterState)
+        ├── utils.py                # LLM helpers & JSON extraction utilities
         ├── Agents/
         │   ├── __init__.py
         │   ├── Guardrails_Agent.py # Safety & scope validation agent
@@ -86,7 +99,7 @@ Writer_editor/
 
 ### 1. Clone the repository
 ```bash
-git clone <repository-url>
+git clone https://github.com/Al-Aasar/Writer_editor.git
 cd Writer_editor
 ```
 
@@ -164,6 +177,27 @@ Run the container:
 ```bash
 docker run -d -p 8000:8000 --env-file .env --name writer-editor-app writer-editor:latest
 ```
+
+---
+
+## Testing
+
+Unit tests cover the guardrail logic, the routing between agents, the editor's decisions, and
+JSON extraction. The LLM is mocked, so the tests are fast, free, and need no API keys.
+
+```bash
+# Windows PowerShell
+$env:PYTHONPATH="src"
+uv run pytest -v
+```
+
+They run automatically on every push via GitHub Actions.
+
+Tests check that the code behaves correctly. The evaluation below checks how well the LLM
+itself performs.
+
+---
+
 ## Evaluation
 
 The guardrail agent is evaluated on a labeled dataset (`eval/guardrails_dataset.jsonl`, 38 cases:
@@ -171,15 +205,22 @@ normal, borderline, harmful, injection, off-scope, empty). Each case runs 3 time
 output varies between runs. Runs where the LLM call fails are counted as errors and excluded
 from accuracy.
 
-Run it:
+Run it (this calls the real Groq API, so it needs a valid key and uses rate limit):
 
-    $env:PYTHONPATH="src"
-    uv run python eval/run_guardrails_eval.py
+```bash
+# Windows PowerShell
+$env:PYTHONPATH="src"
+uv run python eval/run_guardrails_eval.py
+```
 
 | Version | Overall | Hidden injection (8 cases x 3) | Legit requests wrongly blocked |
 |---|---|---|---|
 | Baseline | 93/114 (82%) | 3/24 (12%) | 0 |
 | + explicit injection rule in the prompt, user input moved to the user message | 114/114 (100%) | 24/24 (100%) | 0 |
+
+The guardrail also fails closed: if the LLM call fails, the request is rejected with an error
+instead of being allowed through. This behavior is covered by the unit tests in
+`tests/test_guardrails.py`.
 
 Known limitation: the prompt was tuned against this same dataset, so the 100% is likely optimistic.
 A held-out test set is needed for an unbiased number.
@@ -217,14 +258,21 @@ A held-out test set is needed for an unbiased number.
 }
 ```
 
-- **Blocked Request Response (`200 OK`)**:
+- **Blocked Request Response (`200 OK`)**: `content` holds the guardrail's explanation.
 ```json
 {
   "status": "blocked",
-  "content": "Requests for harmful or off-scope content cannot be processed.",
+  "content": "I cannot provide instructions for creating weapons or explosives.",
   "llm_calls": 1
 }
 ```
+
+- **Error Responses**:
+
+| Status | When |
+|---|---|
+| `502` | The guardrail check or the writer failed (for example, an LLM rate limit). |
+| `500` | Unexpected failure in the workflow. |
 
 ---
 

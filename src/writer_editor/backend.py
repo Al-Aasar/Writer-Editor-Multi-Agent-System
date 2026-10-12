@@ -38,6 +38,8 @@ def guardrail_blocked_agent(state: WriterState):
 
 # ---------- Routers ----------
 def route_from_guardrails(state: WriterState) -> str:
+    if state.get("error"):
+        return "end"
     if state.get("guardrail_allowed", False):
         return "writer_agent"
     return "guardrail_blocked"
@@ -72,7 +74,7 @@ graph.add_edge(START, "guardrails")
 graph.add_conditional_edges(
     "guardrails",
     route_from_guardrails,
-    {"writer_agent": "writer_agent", "guardrail_blocked": "guardrail_blocked"},
+    {"writer_agent": "writer_agent", "guardrail_blocked": "guardrail_blocked", "end": END},
 )
 graph.add_edge("guardrail_blocked", END)
 

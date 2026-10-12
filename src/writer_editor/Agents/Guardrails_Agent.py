@@ -52,13 +52,17 @@ Respond with ONLY a valid JSON object. No markdown, no code fences, no extra tex
             llm=llm,
         )
         guardrail_result = _json_from_llm(guardrail_raw)
-        allowed = bool(guardrail_result.get("allowed", True))
+        allowed = bool(guardrail_result.get("allowed", False))
         guardrail_reason = str(guardrail_result.get("reason", "")).strip()
         llm_calls += 1
+        
     except Exception as exc:
-        print(f"Guardrail fallback used: {exc}")
-        allowed = True
-        guardrail_reason = "Guardrail validation fallback allowed the request."
+        print(f"Guardrail check failed: {exc}")
+        return {
+            "guardrail_allowed": False,
+            "error": f"Guardrail check failed: {exc}",
+            "llm_calls": llm_calls,
+        }
 
     if not allowed:
         reason = guardrail_reason 

@@ -6,18 +6,10 @@ except ImportError:
     from writer_editor.utils import _json_from_llm, _llm_text
 
 from langchain_core.messages import AIMessage
-from langchain_groq import ChatGroq
-import os
+from writer_editor.LLMs.Gemini import llm_gemini
+from writer_editor.LLMs.ChatGroq import llm_groq
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY is missing. Please add it to your .env file.")
-
-llm = ChatGroq(
-    model="qwen/qwen3.8-27b",
-    api_key=GROQ_API_KEY,
-)
+llm = llm_gemini  
 
 WRITER_SYSTEM_PROMPT = """
 You are an Editor Agent in an article-writing system. A Writer Agent produces articles, and you review them. Your job is to decide whether the article is ready to be delivered to the user, and if not, to give the Writer clear feedback.

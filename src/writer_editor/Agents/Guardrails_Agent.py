@@ -6,18 +6,10 @@ except ImportError:
     from writer_editor.utils import _llm_text, _json_from_llm
 
 from langchain_core.messages import AIMessage
-from langchain_groq import ChatGroq
-import os
+from writer_editor.LLMs.Gemini import llm_gemini
+from writer_editor.LLMs.ChatGroq import llm_groq
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY is missing. Please add it to your .env file.")
-
-llm = ChatGroq(
-    model="qwen/qwen3.8-27b",
-    api_key=GROQ_API_KEY,
-)
+llm = llm_groq  # Use ChatGroq as the default LLM for the Guardrails Agent
 
 def guardrail_agent(state: WriterState):
     query = state["user_query"]

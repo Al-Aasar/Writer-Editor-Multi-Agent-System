@@ -1,47 +1,88 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv, find_dotenv
-from langchain_tavily import TavilySearch
 
-# Load .env from project root or environment
-load_dotenv(find_dotenv(usecwd=True))
+import certifi
+from dotenv import load_dotenv
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+
+# =========================================================
+# Environment setup
+# =========================================================
+
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+
+os.environ["SSL_CERT_FILE"] = certifi.where()
+os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
-_search_tool: TavilySearch | None = None
 
 
-def _get_search_tool() -> TavilySearch:
-    global _search_tool
-    if _search_tool is None:
-        api_key = os.getenv("TAVILY_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "TAVILY_API_KEY is missing. "
-                "Add TAVILY_API_KEY=your_key to the project .env file."
-            )
-        _search_tool = TavilySearch(api_key=api_key, max_results=5)
-    return _search_tool
+def _require_env(name: str, value: str | None) -> str:
+    """Return an environment value or raise a readable setup error."""
+
+    if not value:
+        raise RuntimeError(
+            f"{name} is missing. "
+            f"Add {name}=your_key to the project .env file."
+        )
+
+    return value
 
 
-async def tavily_mcp_search(query: str) -> str:
-    """Execute web search using Tavily and return formatted string of results."""
-    try:
-        tool = _get_search_tool()
-        results = await tool.ainvoke({"query": query})
-        if isinstance(results, list):
-            formatted_chunks = []
-            for item in results:
-                if isinstance(item, dict):
-                    title = item.get("title", "")
-                    url = item.get("url", "")
-                    content = item.get("content", "")
-                    formatted_chunks.append(f"Title: {title}\nURL: {url}\nContent: {content}\n")
-                else:
-                    formatted_chunks.append(str(item))
-            return "\n---\n".join(formatted_chunks)
-        return str(results)
-    except Exception as exc:
-        print(f"Tavily search error: {exc}")
-        return ""
+# =========================================================
+# MCP client (Tavily only)
+# =========================================================
+
+client = MultiServerMCPClient(
+    {
+        "tavily": {
+            "transport": "streamable_http",
+            "url": (
+                "https://mcp.tavily.com/mcp/"
+                f"?tavilyApiKey={TAVILY_API_KEY or ''}"
+            ),
+        },
+    }
+)
 
 
+async def _get_tavily_tool(tool_name: str = "tavily_search"):
+    """Load one tool from the Tavily MCP server."""
+
+    _require_env("TAVILY_API_KEY", TAVILY_API_KEY)
+
+    tools = await client.get_tools(server_name="tavily")
+
+    tool = next(
+        (item for item in tools if item.name == tool_name),
+        None,
+    )
+
+    if tool is None:
+        available_tools = (
+            ", ".join(sorted(item.name for item in tools)) or "none"
+        )
+
+        raise RuntimeError(
+            f"MCP tool '{tool_name}' was not found "
+            f"on server 'tavily'. "
+            f"Available tools: {available_tools}"
+        )
+
+    return tool
+
+
+# =========================================================
+# Tavily MCP
+# =========================================================
+
+async def tavily_mcp_search(query: str):
+    search_tool = await _get_tavily_tool("tavily_search")
+
+    return await search_tool.ainvoke(
+        {
+            "query": query,
+        }
+    )

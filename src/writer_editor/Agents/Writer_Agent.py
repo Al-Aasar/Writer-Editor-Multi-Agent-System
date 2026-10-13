@@ -12,15 +12,10 @@ except ImportError:
     from writer_editor.utils import _llm_text
     from writer_editor.MCP.Tavliy_mcp import tavily_mcp_search
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+from writer_editor.LLMs.Gemini import llm_gemini
+from writer_editor.LLMs.ChatGroq import llm_groq
 
-if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY is missing. Please add it to your .env file.")
-
-llm = ChatGroq(
-    model="qwen/qwen3.8-27b",
-    api_key=GROQ_API_KEY,
-)
+llm = llm_gemini  
 
 
 MAX_RESEARCH_CHARS = 6000

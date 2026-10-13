@@ -8,7 +8,22 @@ import json
 from langchain_groq import ChatGroq
 
 
-def _llm_text(user_prompt: str, system_prompt: str, llm: ChatGroq | None = None) -> str:
+from langchain_core.language_models import BaseChatModel
+
+
+def _content_to_text(content) -> str:
+    """Normalize LangChain message content (str or list of blocks) to plain text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content
+        )
+    return str(content)
+
+
+def _llm_text(user_prompt: str, system_prompt: str, llm: BaseChatModel | None = None) -> str:
     if llm is None:
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
@@ -21,7 +36,7 @@ def _llm_text(user_prompt: str, system_prompt: str, llm: ChatGroq | None = None)
             HumanMessage(content=user_prompt),
         ]
     )
-    return str(response.content)
+    return _content_to_text(response.content).strip()
 
 
 def _json_from_llm(text: str) -> dict[str, Any]:

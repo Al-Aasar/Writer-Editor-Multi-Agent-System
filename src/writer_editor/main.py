@@ -1,4 +1,5 @@
 import logging
+logging.getLogger("httpx").setLevel(logging.WARNING)
 from typing import Literal
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -63,4 +64,4 @@ def run():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8000)
+    uvicorn.run(app, host="localhost", port=8000)

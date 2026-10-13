@@ -1,8 +1,9 @@
 # Writer-Editor Multi-Agent System
 
 ![Tests](https://github.com/Al-Aasar/Writer_editor/actions/workflows/tests.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-A well-tested multi-agent article writing and editorial review system built with **LangGraph**, **LangChain**, **Groq**, **Tavily**, and **FastAPI**.
+A well-tested multi-agent article writing and editorial review system built with **LangGraph**, **LangChain**, **Groq**, **Google Gemini**, **Tavily MCP**, and **FastAPI**.
 
 ---
 
@@ -10,9 +11,9 @@ A well-tested multi-agent article writing and editorial review system built with
 
 The **Writer-Editor** pipeline uses a collaborative agent workflow to produce well-researched, high-quality, and reviewed articles from user prompts:
 
-1. **Guardrails Agent**: First checkpoint to validate user prompts against safety guidelines, prompt injection attempts, and scope boundaries.
-2. **Writer Agent**: Gathers up-to-date factual data via Tavily Search and drafts comprehensive articles or revises existing drafts based on editor feedback.
-3. **Editor Agent**: Critiques drafts for accuracy, structure, clarity, and tone. It either approves the draft or returns specific, actionable feedback for revision (up to 3 iterations).
+1. **Guardrails Agent**: First checkpoint powered by Groq (`qwen/qwen3.8-27b`) to validate user prompts against safety guidelines, prompt injection attempts, and scope boundaries.
+2. **Writer Agent**: Powered by Google Gemini (`gemini-3-flash-preview`), gathers up-to-date factual data via Tavily Search (over MCP) and drafts comprehensive articles or revises existing drafts based on editor feedback.
+3. **Editor Agent**: Powered by Google Gemini (`gemini-3-flash-preview`), critiques drafts for accuracy, structure, clarity, and tone. It either approves the draft or returns specific, actionable feedback for revision (up to 3 iterations).
 4. **FastAPI REST API**: Serves the LangGraph pipeline with asynchronous endpoints, strict validation, and health checks.
 
 ---
@@ -21,13 +22,13 @@ The **Writer-Editor** pipeline uses a collaborative agent workflow to produce we
 
 ```mermaid
 flowchart TD
-    Start([Start]) --> Guardrails[Guardrails Agent]
+    Start([Start]) --> Guardrails[Guardrails Agent<br>Groq: qwen/qwen3.8-27b]
     
     Guardrails -->|Blocked / Harmful / Off-scope| BlockedNode[Guardrail Blocked]
     BlockedNode --> EndNode([End])
     
-    Guardrails -->|Allowed| Writer[Writer Agent]
-    Writer -->|Draft Generated| Editor[Editor Agent]
+    Guardrails -->|Allowed| Writer[Writer Agent<br>Gemini 3 Flash Preview]
+    Writer -->|Draft Generated| Editor[Editor Agent<br>Gemini 3 Flash Preview]
     
     Editor -->|Rejected & Iteration < 3| Writer
     Editor -->|Approved OR Iteration >= 3| EndNode
@@ -38,13 +39,15 @@ flowchart TD
 ## Features
 
 - **Multi-Agent Collaboration**: Specialized roles (Security/Guardrails, Research & Writing, Editorial Review).
-- **Automated Feedback Loop**: Iterative refinement cycle (up to 3 rounds) with stopping criteria.
-- **Web Research Grounding**: Integrates live web search via Tavily Search to provide factual citations and reduce hallucinations.
-- **Fail-Closed Guardrails**: If the safety check itself fails (for example, an LLM rate limit), the request is rejected instead of allowed through.
-- **Tested & Evaluated**: Unit tests with CI, plus a labeled evaluation set for the guardrail prompt.
-- **High Performance LLM Inference**: Powered by Groq's high-speed inference engine (`qwen/qwen3.8-27b`).
-- **RESTful API**: Async FastAPI interface with Pydantic request/response schemas.
-- **Container Ready**: Dockerfile configured using Astral `uv` for minimal image size and fast build times.
+- **Hybrid Multi-Model Orchestration**: Combines Groq (`qwen/qwen3.8-27b`) for ultra-fast security guardrails with Google Gemini (`gemini-3-flash-preview`) for high-context article drafting and editorial critique.
+- **Modular LLM Architecture**: Clean separation and centralization of LLM clients in `writer_editor.LLMs`, making models easy to swap or configure.
+- **Model Context Protocol (MCP) Integration**: Connects to Tavily Search via `langchain-mcp-adapters` with `streamable_http` transport for factual web research and grounded citations.
+- **Automated Feedback Loop**: Iterative refinement cycle (up to 3 rounds) with clear stopping criteria.
+- **Fail-Closed Guardrails**: If the safety check itself fails (e.g. LLM rate limit or connection failure), the request is rejected immediately as a protective measure.
+- **Observability & Tracing Ready**: Full integration with **LangSmith** for tracking execution graphs, latency, token usage, and agent inputs/outputs.
+- **Tested & Evaluated**: Unit tests with CI (100% pass rate with mocked LLMs), plus a labeled evaluation set for the guardrail prompt.
+- **RESTful API**: Async FastAPI interface with Pydantic request/response schemas and clean HTTP logging.
+- **Container Ready**: Production Dockerfile configured using Astral `uv` for minimal image size and fast build times.
 
 ---
 
@@ -53,10 +56,12 @@ flowchart TD
 ```text
 Writer_editor/
 ├── .github/workflows/
-│   └── tests.yml                   # CI: runs the tests on every push
+│   └── tests.yml                   # CI: runs pytest on every push & PR
 ├── eval/
 │   ├── guardrails_dataset.jsonl    # Labeled cases for the guardrail eval
-│   └── run_guardrails_eval.py      # Runs each case 3 times and reports accuracy
+│   ├── run_guardrails_eval.py      # Runs each case 3 times and reports accuracy
+│   ├── check_fail_closed.py        # Fail-closed safety behavior test
+│   └── check_tracing.py            # LangSmith tracing connectivity test
 ├── tests/                          # Unit tests (LLM calls are mocked)
 │   ├── conftest.py
 │   ├── test_guardrails.py
@@ -64,6 +69,7 @@ Writer_editor/
 │   ├── test_editor.py
 │   └── test_utils.py
 ├── Dockerfile                      # Container deployment specification
+├── LICENSE.txt                     # MIT License
 ├── pyproject.toml                  # Project dependencies and CLI entrypoints
 ├── uv.lock                         # Locked dependency tree
 ├── .env.example                    # Sample environment variables
@@ -80,8 +86,13 @@ Writer_editor/
         │   ├── Guardrails_Agent.py # Safety & scope validation agent
         │   ├── Writer_Agent.py     # Research & writing agent
         │   └── Editor_Agent.py     # Editorial review agent
+        ├── LLMs/
+        │   ├── __init__.py
+        │   ├── ChatGroq.py         # Groq LLM initialization
+        │   └── Gemini.py           # Gemini LLM initialization
         └── MCP/
-            └── Tavliy_mcp.py       # Tavily search integration wrapper
+            ├── __init__.py
+            └── Tavliy_mcp.py       # Tavily search MCP client wrapper
 ```
 
 ---
@@ -91,7 +102,9 @@ Writer_editor/
 - **Python**: `>= 3.12`
 - **uv** (recommended) or standard `pip`
 - **Groq API Key**: [Groq Console](https://console.groq.com/)
+- **Google Gemini API Key**: [Google AI Studio](https://aistudio.google.com/)
 - **Tavily API Key**: [Tavily AI](https://tavily.com/)
+- *(Optional)* **LangSmith API Key**: [LangSmith](https://smith.langchain.com/) for observability
 
 ---
 
@@ -112,7 +125,13 @@ cp .env.example .env
 Add your API credentials:
 ```env
 GROQ_API_KEY=gsk_your_groq_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 TAVILY_API_KEY=tvly-your_tavily_api_key_here
+
+# Optional: LangSmith Tracing
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2_pt_your_langsmith_key
+LANGSMITH_PROJECT=writer-editor
 ```
 
 ### 3. Install Dependencies
@@ -273,6 +292,26 @@ A held-out test set is needed for an unbiased number.
 |---|---|
 | `502` | The guardrail check or the writer failed (for example, an LLM rate limit). |
 | `500` | Unexpected failure in the workflow. |
+
+---
+
+## Observability & Tracing
+
+The project supports deep agent tracing and telemetry via **LangSmith**. When enabled, every graph run, agent thought, tool invocation, token count, and latency metric is automatically logged.
+
+To verify your LangSmith configuration and connection:
+
+```bash
+# Windows PowerShell
+$env:PYTHONPATH="src"
+uv run python eval/check_tracing.py
+```
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.txt) file for details.
 
 ---
 

@@ -1,6 +1,6 @@
 # Writer-Editor Multi-Agent System
 
-![Tests](https://github.com/Al-Aasar/Writer_editor/actions/workflows/tests.yml/badge.svg)
+![Tests](https://github.com/Al-Aasar/Writer-Editor-Multi-Agent-System/actions/workflows/tests.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 A well-tested multi-agent article writing and editorial review system built with **LangGraph**, **LangChain**, **Groq**, **Google Gemini**, **Tavily MCP**, and **FastAPI**.
